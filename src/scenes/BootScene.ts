@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { TILE_SIZE, COLORS } from '../config/constants';
+import { createPlayerTexture, createRobotTexture } from '../sprites/characters';
 
 /**
  * BootScene: generates placeholder sprite textures so we don't need
@@ -16,17 +17,11 @@ export class BootScene extends Phaser.Scene {
   }
 
   private generateTextures() {
-    // Player - simple character (blue-ish figure)
-    this.makeRect('player', TILE_SIZE, TILE_SIZE, 0x3366cc);
+    // Player - pixel art explorer in red parka
+    createPlayerTexture(this);
 
-    // Robot companion (silver/gray with antenna dot)
-    const robotGfx = this.add.graphics();
-    robotGfx.fillStyle(0xaaaacc, 1);
-    robotGfx.fillRect(0, 4, TILE_SIZE, TILE_SIZE - 4);
-    robotGfx.fillStyle(0xff4444, 1);
-    robotGfx.fillCircle(TILE_SIZE / 2, 3, 3); // antenna
-    robotGfx.generateTexture('robot', TILE_SIZE, TILE_SIZE);
-    robotGfx.destroy();
+    // Robot companion - friendly helper bot
+    createRobotTexture(this);
 
     // Tundra ground tiles
     this.makeRect('ground_light', TILE_SIZE, TILE_SIZE, COLORS.tundraLight);
