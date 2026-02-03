@@ -52,3 +52,10 @@ See `docs/GAME_DESIGN.md` for full details. Key concepts:
 - Phaser conventions: PascalCase for scenes/classes, camelCase for methods/variables
 - Keep game config/balance values in `src/config/` so they're easy to tune
 - Prefer composition over deep inheritance for entities
+
+## Sprite Workflow
+- Sprite definitions live in `src/sprites/definitions/` as TypeScript files
+- Each sprite has a palette (color index -> hex) and pixel map (2D array)
+- Generate PNGs: `npx tsx scripts/generate-sprite-pngs.ts`
+- Output: `src/assets/sprites/[name].png`
+- User describes sprite → Claude generates palette/pixels → script creates PNG → optional Piskel touchups
