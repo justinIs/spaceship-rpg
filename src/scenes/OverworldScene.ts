@@ -1,5 +1,12 @@
 import Phaser from 'phaser';
 import { TILE_SIZE, PLAYER_SPEED, COLORS } from '../config/constants';
+import {
+    SPRITE_KEYS,
+    SPRITE_CONFIG,
+    TEXTURE_KEYS,
+    DIRECTION_TO_ANIMS,
+    getDirectionIndex
+} from '../config/assets';
 
 // World dimensions in tiles
 const WORLD_W = 40;
@@ -31,6 +38,7 @@ export class OverworldScene extends Phaser.Scene {
     private interactables: Interactable[] = [];
     private promptText!: Phaser.GameObjects.Text;
     private hintText!: Phaser.GameObjects.Text;
+    private currentDirection = 0; // Track last facing direction (0-7)
 
     // Mobile touch state
     private touchStartX = 0;
@@ -45,10 +53,14 @@ export class OverworldScene extends Phaser.Scene {
 
 
     preload() {
-        this.load.spritesheet('player', 'src/assets/sprites/player.png', {
-            frameWidth: 32,
-            frameHeight: 32
-        })
+        this.load.spritesheet(SPRITE_KEYS.PLAYER, 'src/assets/sprites/player.png', {
+            frameWidth: SPRITE_CONFIG.PLAYER.frameWidth,
+            frameHeight: SPRITE_CONFIG.PLAYER.frameHeight
+        });
+        this.load.spritesheet(SPRITE_KEYS.ROBOT, 'src/assets/sprites/robot.png', {
+            frameWidth: SPRITE_CONFIG.ROBOT.frameWidth,
+            frameHeight: SPRITE_CONFIG.ROBOT.frameHeight
+        });
     }
 
     create() {
@@ -68,27 +80,15 @@ export class OverworldScene extends Phaser.Scene {
         const homeX = (WORLD_W / 2) * TILE_SIZE;
         const homeY = (WORLD_H / 2) * TILE_SIZE;
 
-        this.player = this.physics.add.sprite(homeX, homeY + TILE_SIZE * 2, 'player');
+        this.player = this.physics.add.sprite(homeX, homeY + TILE_SIZE * 2, SPRITE_KEYS.PLAYER);
         this.player.setCollideWorldBounds(true);
         this.player.setDepth(10);
 
-
-        // Create walk animation
-        this.anims.create({
-            key: 'walk-down',
-            frames: this.anims.generateFrameNumbers('player', { start: 0, end: 2 }),
-            frameRate: 10,
-            repeat: -1
-        })
-
-        this.anims.create({
-            key: 'idle',
-            frames: [{ key: 'player', frame: 0 }],
-            frameRate: 10
-        })
+        // Create all 8-direction animations
+        this.createPlayerAnimations();
 
         // Robot follows player, starts next to them
-        this.robot = this.physics.add.sprite(homeX + TILE_SIZE * 2, homeY + TILE_SIZE * 2, 'robot');
+        this.robot = this.physics.add.sprite(homeX + TILE_SIZE * 2, homeY + TILE_SIZE * 2, SPRITE_KEYS.ROBOT);
         this.robot.setCollideWorldBounds(true);
         this.robot.setDepth(10);
 
@@ -158,6 +158,38 @@ export class OverworldScene extends Phaser.Scene {
         this.handleInteraction();
     }
 
+    /**
+     * Create all 8-direction walk and idle animations for the player
+     * Sprite sheet layout: 8 rows (directions) × 3 columns (frames)
+     */
+    private createPlayerAnimations() {
+        const { frameRate } = SPRITE_CONFIG.PLAYER;
+
+        // Create walk and idle animations for each of the 8 directions
+        for (let dirIndex = 0; dirIndex < 8; dirIndex++) {
+            const startFrame = dirIndex * 3; // Each direction has 3 frames
+            const { walk, idle } = DIRECTION_TO_ANIMS[dirIndex];
+
+            // Walk animation (frames 0, 1, 2 for this direction)
+            this.anims.create({
+                key: walk,
+                frames: this.anims.generateFrameNumbers(SPRITE_KEYS.PLAYER, {
+                    start: startFrame,
+                    end: startFrame + 2
+                }),
+                frameRate,
+                repeat: -1
+            });
+
+            // Idle animation (frame 1 - the neutral standing pose)
+            this.anims.create({
+                key: idle,
+                frames: [{ key: SPRITE_KEYS.PLAYER, frame: startFrame + 1 }],
+                frameRate
+            });
+        }
+    }
+
     private handlePlayerMovement() {
         let vx = 0;
         let vy = 0;
@@ -180,18 +212,24 @@ export class OverworldScene extends Phaser.Scene {
             if (Math.abs(this.touchDirY) > deadzone) vy = Math.sign(this.touchDirY);
         }
 
-        // Play correct animation
-        if (down) {
-            this.player.anims.play('walk-down', true)
-        } else {
-            this.player.anims.play('idle', true)
-        }
-
         // Normalize diagonal movement
         if (vx !== 0 && vy !== 0) {
             const norm = 1 / Math.SQRT2;
             vx *= norm;
             vy *= norm;
+        }
+
+        // Play correct animation based on direction
+        if (vx !== 0 || vy !== 0) {
+            // Moving - get direction and play walk animation
+            const dirIndex = getDirectionIndex(vx, vy);
+            this.currentDirection = dirIndex;
+            const animKey = DIRECTION_TO_ANIMS[dirIndex].walk;
+            this.player.anims.play(animKey, true);
+        } else {
+            // Idle - play idle animation for last facing direction
+            const animKey = DIRECTION_TO_ANIMS[this.currentDirection].idle;
+            this.player.anims.play(animKey, true);
         }
 
         this.player.setVelocity(vx * PLAYER_SPEED, vy * PLAYER_SPEED);
@@ -300,19 +338,19 @@ export class OverworldScene extends Phaser.Scene {
         // === Player's Lot (center of world) ===
 
         // House
-        const house = this.add.sprite(cx - TILE_SIZE * 3, cy - TILE_SIZE, 'house').setOrigin(0, 0);
+        const house = this.add.sprite(cx - TILE_SIZE * 3, cy - TILE_SIZE, TEXTURE_KEYS.HOUSE).setOrigin(0, 0);
         house.setDepth(2);
         this.addLabel(cx - TILE_SIZE * 1.5, cy - TILE_SIZE * 1.5, 'House');
         this.addInteractable(house, 'Enter House', 'Home sweet home. Rest here to get robot tips.');
 
         // Garage (workshop)
-        const garage = this.add.sprite(cx + TILE_SIZE * 2, cy - TILE_SIZE, 'garage').setOrigin(0, 0);
+        const garage = this.add.sprite(cx + TILE_SIZE * 2, cy - TILE_SIZE, TEXTURE_KEYS.GARAGE).setOrigin(0, 0);
         garage.setDepth(2);
         this.addLabel(cx + TILE_SIZE * 3.5, cy - TILE_SIZE * 1.5, 'Garage');
         this.addInteractable(garage, 'Open Garage', 'Your workshop. The spaceship awaits...');
 
         // Solar panel
-        const solar = this.add.sprite(cx + TILE_SIZE * 6, cy, 'solar').setDepth(2);
+        const solar = this.add.sprite(cx + TILE_SIZE * 6, cy, TEXTURE_KEYS.SOLAR).setDepth(2);
         this.addLabel(cx + TILE_SIZE * 6, cy - TILE_SIZE, 'Solar', '10px');
         this.addInteractable(solar, 'Check Solar', 'Solar panel generating power. Battery: OK');
 
@@ -321,20 +359,20 @@ export class OverworldScene extends Phaser.Scene {
         for (let i = 0; i < 6; i++) {
             const rx = cx + (i - 3) * TILE_SIZE * 2.5;
             const ry = rockyY + Math.sin(i) * TILE_SIZE * 2;
-            this.add.sprite(rx, ry, 'rock').setDepth(1);
+            this.add.sprite(rx, ry, TEXTURE_KEYS.ROCK).setDepth(1);
         }
         // Scattered scrap
         for (let i = 0; i < 4; i++) {
             const sx = cx + (i - 2) * TILE_SIZE * 3;
             const sy = rockyY + TILE_SIZE * 2 + Math.cos(i * 2) * TILE_SIZE;
-            const scrap = this.add.sprite(sx, sy, 'scrap').setDepth(1);
+            const scrap = this.add.sprite(sx, sy, TEXTURE_KEYS.SCRAP).setDepth(1);
             this.addInteractable(scrap, 'Pick Up Scrap', 'Scrap metal collected! (inventory coming soon)');
         }
         this.addLabel(cx, rockyY - TILE_SIZE * 2, 'Rocky Outcrops');
 
         // === Iron Mine (north) ===
         const mineY = 6 * TILE_SIZE;
-        const mine = this.add.sprite(cx - TILE_SIZE, mineY, 'mine').setOrigin(0, 0).setDepth(2);
+        const mine = this.add.sprite(cx - TILE_SIZE, mineY, TEXTURE_KEYS.MINE).setOrigin(0, 0).setDepth(2);
         this.addLabel(cx, mineY - TILE_SIZE, 'Iron Mine');
         this.addInteractable(mine, 'Enter Mine', 'The iron mine. Dark and full of ore.');
 
@@ -342,7 +380,7 @@ export class OverworldScene extends Phaser.Scene {
         for (let i = 0; i < 5; i++) {
             const ox = cx + (i - 2) * TILE_SIZE * 2;
             const oy = mineY + TILE_SIZE * 3 + (i % 2) * TILE_SIZE;
-            const ore = this.add.sprite(ox, oy, 'ore').setDepth(1);
+            const ore = this.add.sprite(ox, oy, TEXTURE_KEYS.ORE).setDepth(1);
             this.addInteractable(ore, 'Mine Ore', 'Iron ore mined! (inventory coming soon)');
         }
 
@@ -353,7 +391,7 @@ export class OverworldScene extends Phaser.Scene {
         for (let i = 0; i < 3; i++) {
             const rx = cx + (i - 1) * TILE_SIZE * 5;
             const ry = cy + TILE_SIZE * 15 + i * TILE_SIZE;
-            this.add.sprite(rx, ry, 'rock').setDepth(1);
+            this.add.sprite(rx, ry, TEXTURE_KEYS.ROCK).setDepth(1);
         }
 
         // === Mountains hint (far north) ===

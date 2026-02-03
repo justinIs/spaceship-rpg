@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { TILE_SIZE, COLORS } from '../config/constants';
-import { createRobotTexture } from '../sprites/characters';
+import { TEXTURE_KEYS } from '../config/assets';
 
 /**
  * BootScene: generates placeholder sprite textures so we don't need
@@ -17,31 +17,25 @@ export class BootScene extends Phaser.Scene {
     }
 
     private generateTextures() {
-        // Player - pixel art explorer in red parka
-        // createPlayerTexture(this);
-
-        // Robot companion - friendly helper bot
-        createRobotTexture(this);
-
         // Tundra ground tiles
-        this.makeRect('ground_light', TILE_SIZE, TILE_SIZE, COLORS.tundraLight);
-        this.makeRect('ground_dark', TILE_SIZE, TILE_SIZE, COLORS.tundraDark);
-        this.makeRect('path', TILE_SIZE, TILE_SIZE, COLORS.path);
+        this.makeRect(TEXTURE_KEYS.GROUND_LIGHT, TILE_SIZE, TILE_SIZE, COLORS.tundraLight);
+        this.makeRect(TEXTURE_KEYS.GROUND_DARK, TILE_SIZE, TILE_SIZE, COLORS.tundraDark);
+        this.makeRect(TEXTURE_KEYS.PATH, TILE_SIZE, TILE_SIZE, COLORS.path);
 
         // Rock / scrap
-        this.makeRect('rock', TILE_SIZE, TILE_SIZE, COLORS.rock);
+        this.makeRect(TEXTURE_KEYS.ROCK, TILE_SIZE, TILE_SIZE, COLORS.rock);
 
         // House
-        this.makeRect('house', TILE_SIZE * 3, TILE_SIZE * 2, COLORS.house);
+        this.makeRect(TEXTURE_KEYS.HOUSE, TILE_SIZE * 3, TILE_SIZE * 2, COLORS.house);
 
         // Garage
-        this.makeRect('garage', TILE_SIZE * 3, TILE_SIZE * 2, COLORS.garage);
+        this.makeRect(TEXTURE_KEYS.GARAGE, TILE_SIZE * 3, TILE_SIZE * 2, COLORS.garage);
 
         // Solar panel
-        this.makeRect('solar', TILE_SIZE, TILE_SIZE, COLORS.solar);
+        this.makeRect(TEXTURE_KEYS.SOLAR, TILE_SIZE, TILE_SIZE, COLORS.solar);
 
         // Mine entrance
-        this.makeRect('mine', TILE_SIZE * 2, TILE_SIZE * 2, COLORS.mine);
+        this.makeRect(TEXTURE_KEYS.MINE, TILE_SIZE * 2, TILE_SIZE * 2, COLORS.mine);
 
         // Iron ore node
         const oreGfx = this.add.graphics();
@@ -50,7 +44,7 @@ export class BootScene extends Phaser.Scene {
         oreGfx.fillStyle(0xcc8844, 1);
         oreGfx.fillCircle(TILE_SIZE / 2 - 4, TILE_SIZE / 2, 4);
         oreGfx.fillCircle(TILE_SIZE / 2 + 5, TILE_SIZE / 2 - 3, 3);
-        oreGfx.generateTexture('ore', TILE_SIZE, TILE_SIZE);
+        oreGfx.generateTexture(TEXTURE_KEYS.ORE, TILE_SIZE, TILE_SIZE);
         oreGfx.destroy();
 
         // Scrap metal
@@ -59,7 +53,7 @@ export class BootScene extends Phaser.Scene {
         scrapGfx.fillRect(4, 8, TILE_SIZE - 8, TILE_SIZE - 16);
         scrapGfx.fillStyle(0x666666, 1);
         scrapGfx.fillRect(8, 4, TILE_SIZE - 16, TILE_SIZE - 8);
-        scrapGfx.generateTexture('scrap', TILE_SIZE, TILE_SIZE);
+        scrapGfx.generateTexture(TEXTURE_KEYS.SCRAP, TILE_SIZE, TILE_SIZE);
         scrapGfx.destroy();
     }
 
