@@ -7,6 +7,10 @@ import {
     DIRECTION_TO_ANIMS,
     getDirectionIndex
 } from '../config/assets';
+import { GameStateSystem } from '../systems/GameStateSystem';
+import { ObjectiveTracker } from '../ui/ObjectiveTracker';
+import { DialogueBox } from '../ui/DialogueBox';
+import { QUESTS } from '../config/quests';
 
 // World dimensions in tiles
 const WORLD_W = 40;
@@ -27,6 +31,9 @@ interface Interactable {
     sprite: Phaser.GameObjects.Sprite;
     type: string;
     message: string;
+    onInteract?: () => void;  // Callback when interacted
+    oneTime?: boolean;        // Remove after interaction
+    id?: string;              // Unique identifier
 }
 
 export class OverworldScene extends Phaser.Scene {
@@ -39,6 +46,10 @@ export class OverworldScene extends Phaser.Scene {
     private promptText!: Phaser.GameObjects.Text;
     private hintText!: Phaser.GameObjects.Text;
     private currentDirection = 0; // Track last facing direction (0-7)
+
+    // UI components
+    private objectiveTracker!: ObjectiveTracker;
+    private dialogueBox!: DialogueBox;
 
     // Mobile touch state
     private touchStartX = 0;
@@ -150,6 +161,34 @@ export class OverworldScene extends Phaser.Scene {
             backgroundColor: '#222222cc',
             padding: { x: 8, y: 4 },
         }).setOrigin(0.5, 1).setDepth(20).setScrollFactor(0).setVisible(false);
+
+        // Initialize UI components
+        this.objectiveTracker = new ObjectiveTracker(this);
+        this.dialogueBox = new DialogueBox(this);
+
+        // Initialize game state and start intro
+        this.initializeGameState();
+    }
+
+    private initializeGameState(): void {
+        const gameState = GameStateSystem.fromScene(this);
+
+        // Register the battery quest
+        gameState.quests.addQuest(QUESTS.fix_battery);
+
+        // Show intro dialogue after a short delay
+        this.time.delayedCall(500, () => {
+            if (!gameState.introComplete) {
+                gameState.dialogue.say('Robot', "Power's out. The battery cells got scattered somehow.");
+                gameState.dialogue.say('Robot', 'Help me find 3 battery cells around the homestead?');
+
+                // Start the quest after dialogue
+                gameState.dialogue.once('dialogue-end', () => {
+                    gameState.introComplete = true;
+                    gameState.quests.startQuest('fix_battery');
+                });
+            }
+        });
     }
 
     update() {
@@ -191,6 +230,13 @@ export class OverworldScene extends Phaser.Scene {
     }
 
     private handlePlayerMovement() {
+        // Don't move if dialogue is active
+        const gameState = GameStateSystem.fromScene(this);
+        if (gameState.dialogue.isActive()) {
+            this.player.setVelocity(0, 0);
+            return;
+        }
+
         let vx = 0;
         let vy = 0;
 
@@ -278,7 +324,17 @@ export class OverworldScene extends Phaser.Scene {
 
             // Check for E key press (justDown prevents repeat firing)
             if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
-                this.showHint(closest.message);
+                // Call custom callback if provided
+                if (closest.onInteract) {
+                    closest.onInteract();
+                } else {
+                    this.showHint(closest.message);
+                }
+
+                // Remove one-time interactables
+                if (closest.oneTime) {
+                    this.removeInteractable(closest);
+                }
             }
         } else {
             this.promptText.setVisible(false);
@@ -299,8 +355,32 @@ export class OverworldScene extends Phaser.Scene {
         });
     }
 
-    private addInteractable(sprite: Phaser.GameObjects.Sprite, type: string, message: string) {
-        this.interactables.push({ sprite, type, message });
+    private addInteractable(
+        sprite: Phaser.GameObjects.Sprite,
+        type: string,
+        message: string,
+        options?: { onInteract?: () => void; oneTime?: boolean; id?: string }
+    ): Interactable {
+        const interactable: Interactable = {
+            sprite,
+            type,
+            message,
+            ...options
+        };
+        this.interactables.push(interactable);
+        return interactable;
+    }
+
+    private removeInteractable(interactable: Interactable): void {
+        const index = this.interactables.indexOf(interactable);
+        if (index !== -1) {
+            this.interactables.splice(index, 1);
+            interactable.sprite.destroy();
+        }
+    }
+
+    private findInteractableById(id: string): Interactable | undefined {
+        return this.interactables.find(i => i.id === id);
     }
 
     // --- World building ---
@@ -352,7 +432,18 @@ export class OverworldScene extends Phaser.Scene {
         // Solar panel
         const solar = this.add.sprite(cx + TILE_SIZE * 6, cy, TEXTURE_KEYS.SOLAR).setDepth(2);
         this.addLabel(cx + TILE_SIZE * 6, cy - TILE_SIZE, 'Solar', '10px');
-        this.addInteractable(solar, 'Check Solar', 'Solar panel generating power. Battery: OK');
+        this.addInteractable(solar, 'Check Solar', 'Solar panel is fine, but the battery needs repair.');
+
+        // Terminal near solar panel - for jack-in puzzle
+        const terminal = this.add.sprite(cx + TILE_SIZE * 6, cy + TILE_SIZE * 1.5, TEXTURE_KEYS.TERMINAL).setDepth(2);
+        this.addLabel(cx + TILE_SIZE * 6, cy + TILE_SIZE * 2.5, 'Terminal', '10px');
+        this.addInteractable(terminal, 'Jack In', 'Access the battery control system.', {
+            id: 'terminal',
+            onInteract: () => this.onTerminalInteract(),
+        });
+
+        // === Battery Cells (scattered around homestead) ===
+        this.placeBatteryCells(cx, cy);
 
         // === Rocky area / scrap (between home and mine) ===
         const rockyY = cy - TILE_SIZE * 10;
@@ -366,7 +457,14 @@ export class OverworldScene extends Phaser.Scene {
             const sx = cx + (i - 2) * TILE_SIZE * 3;
             const sy = rockyY + TILE_SIZE * 2 + Math.cos(i * 2) * TILE_SIZE;
             const scrap = this.add.sprite(sx, sy, TEXTURE_KEYS.SCRAP).setDepth(1);
-            this.addInteractable(scrap, 'Pick Up Scrap', 'Scrap metal collected! (inventory coming soon)');
+            this.addInteractable(scrap, 'Pick Up Scrap', 'Scrap metal collected!', {
+                oneTime: true,
+                onInteract: () => {
+                    const gameState = GameStateSystem.fromScene(this);
+                    gameState.inventory.add('scrap_metal');
+                    this.showHint('Scrap metal collected!');
+                },
+            });
         }
         this.addLabel(cx, rockyY - TILE_SIZE * 2, 'Rocky Outcrops');
 
@@ -375,14 +473,6 @@ export class OverworldScene extends Phaser.Scene {
         const mine = this.add.sprite(cx - TILE_SIZE, mineY, TEXTURE_KEYS.MINE).setOrigin(0, 0).setDepth(2);
         this.addLabel(cx, mineY - TILE_SIZE, 'Iron Mine');
         this.addInteractable(mine, 'Enter Mine', 'The iron mine. Dark and full of ore.');
-
-        // Ore nodes near the mine
-        for (let i = 0; i < 5; i++) {
-            const ox = cx + (i - 2) * TILE_SIZE * 2;
-            const oy = mineY + TILE_SIZE * 3 + (i % 2) * TILE_SIZE;
-            const ore = this.add.sprite(ox, oy, TEXTURE_KEYS.ORE).setDepth(1);
-            this.addInteractable(ore, 'Mine Ore', 'Iron ore mined! (inventory coming soon)');
-        }
 
         // === Open Tundra (south) ===
         this.addLabel(cx, cy + TILE_SIZE * 12, 'Open Tundra');
@@ -396,6 +486,90 @@ export class OverworldScene extends Phaser.Scene {
 
         // === Mountains hint (far north) ===
         this.addLabel(cx, 2 * TILE_SIZE, 'Mountains (Deep Mines - future)');
+    }
+
+    private placeBatteryCells(cx: number, cy: number): void {
+        const gameState = GameStateSystem.fromScene(this);
+        const cellLocations = [
+            { x: cx - TILE_SIZE * 4, y: cy + TILE_SIZE * 3, label: 'Near House' },
+            { x: cx + TILE_SIZE * 7, y: cy - TILE_SIZE * 0.5, label: 'By Solar Panel' },
+            { x: cx + TILE_SIZE * 4, y: cy - TILE_SIZE * 2, label: 'Inside Garage Area' },
+        ];
+
+        cellLocations.forEach((loc, index) => {
+            // Add pulsing glow effect
+            const glow = this.add.circle(loc.x, loc.y, TILE_SIZE * 0.6, 0x44ff44, 0.3);
+            glow.setDepth(0);
+            this.tweens.add({
+                targets: glow,
+                alpha: 0.1,
+                scale: 1.2,
+                duration: 800,
+                yoyo: true,
+                repeat: -1,
+            });
+
+            const cell = this.add.sprite(loc.x, loc.y, TEXTURE_KEYS.BATTERY_CELL).setDepth(3);
+            this.addInteractable(cell, 'Pick Up Battery Cell', 'Battery cell collected!', {
+                id: `battery_cell_${index}`,
+                oneTime: true,
+                onInteract: () => {
+                    glow.destroy();
+                    gameState.inventory.add('battery_cell');
+                    gameState.quests.updateProgress('collect_cells', 1);
+
+                    const count = gameState.inventory.getCount('battery_cell');
+                    if (count < 3) {
+                        this.showHint(`Battery cell collected! (${count}/3)`);
+                    } else {
+                        this.showHint('All battery cells collected! Use the terminal.');
+                    }
+                },
+            });
+        });
+    }
+
+    private onTerminalInteract(): void {
+        const gameState = GameStateSystem.fromScene(this);
+        const quest = gameState.quests.getActiveQuest();
+
+        // Check if we have all battery cells
+        if (!gameState.inventory.has('battery_cell', 3)) {
+            const count = gameState.inventory.getCount('battery_cell');
+            this.showHint(`Need 3 battery cells to repair. Found: ${count}/3`);
+            return;
+        }
+
+        // Check if already on the terminal step
+        const currentStep = gameState.quests.getCurrentStep();
+        if (!currentStep || currentStep.id !== 'use_terminal') {
+            this.showHint('Need all battery cells first!');
+            return;
+        }
+
+        // Launch the puzzle
+        this.scene.pause();
+        this.scene.launch('CircuitPuzzleScene', {
+            puzzleId: 'battery_repair',
+            onComplete: () => this.onPuzzleComplete(),
+        });
+    }
+
+    private onPuzzleComplete(): void {
+        const gameState = GameStateSystem.fromScene(this);
+
+        // Complete the quest
+        gameState.quests.completeCurrentStep();
+        gameState.powerRestored = true;
+
+        // Remove battery cells from inventory (they were used)
+        gameState.inventory.remove('battery_cell', 3);
+
+        // Show completion dialogue
+        this.time.delayedCall(500, () => {
+            gameState.dialogue.say('Robot', "Power's back! Nice work, partner.");
+            gameState.dialogue.say('Robot', "Now we can get to the real work. The spaceship won't build itself!");
+        });
     }
 
     private addLabel(x: number, y: number, text: string, size = '11px') {

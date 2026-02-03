@@ -21,6 +21,15 @@ export const TEXTURE_KEYS = {
   MINE: 'mine',
   ORE: 'ore',
   SCRAP: 'scrap',
+  // New items for battery quest
+  BATTERY_CELL: 'battery_cell',
+  TERMINAL: 'terminal',
+  // Puzzle tiles
+  PUZZLE_FLOOR: 'puzzle_floor',
+  PUZZLE_WALL: 'puzzle_wall',
+  PUZZLE_SOURCE: 'puzzle_source',
+  PUZZLE_TARGET: 'puzzle_target',
+  PUZZLE_SPARK: 'puzzle_spark',
 } as const;
 
 // Player animation keys
