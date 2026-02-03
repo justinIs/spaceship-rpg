@@ -47,7 +47,7 @@ function hexToRGBA(hex: number | null): [number, number, number, number] {
 
 function createPNGChunk(type: string, data: Buffer): Buffer {
   const typeBuffer = Buffer.from(type, 'ascii');
-  const chunkData = Buffer.concat([typeBuffer, data]);
+  const chunkData = concatBuffers([typeBuffer, data]);
 
   let crc = 0xFFFFFFFF;
   for (let i = 0; i < chunkData.length; i++) {
@@ -64,7 +64,18 @@ function createPNGChunk(type: string, data: Buffer): Buffer {
   const crcBuffer = Buffer.alloc(4);
   crcBuffer.writeUInt32BE(crc >>> 0, 0);
 
-  return Buffer.concat([length, typeBuffer, data, crcBuffer]);
+  return concatBuffers([length, typeBuffer, data, crcBuffer]);
+}
+
+function concatBuffers(buffers: Buffer[]): Buffer {
+  const totalLength = buffers.reduce((sum, buffer) => sum + buffer.length, 0);
+  const result = Buffer.alloc(totalLength);
+  let offset = 0;
+  for (const buffer of buffers) {
+    result.set(buffer, offset);
+    offset += buffer.length;
+  }
+  return result;
 }
 
 /**
@@ -113,7 +124,7 @@ export function generatePNG(sprite: SpriteDefinition, outputPath: string): { fra
     }
   }
 
-  const compressed = zlib.deflateSync(Buffer.from(rawData), { level: 9 });
+  const compressed = zlib.deflateSync(Uint8Array.from(rawData), { level: 9 });
 
   const signature = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
 
@@ -130,8 +141,9 @@ export function generatePNG(sprite: SpriteDefinition, outputPath: string): { fra
   const idatChunk = createPNGChunk('IDAT', compressed);
   const iendChunk = createPNGChunk('IEND', Buffer.alloc(0));
 
-  const png = Buffer.concat([signature, ihdrChunk, idatChunk, iendChunk]);
-  fs.writeFileSync(outputPath, png);
+  const png = concatBuffers([signature, ihdrChunk, idatChunk, iendChunk]);
+  const pngView = new Uint8Array(png.buffer, png.byteOffset, png.byteLength);
+  fs.writeFileSync(outputPath, pngView);
 
   console.log(`✓ ${sprite.name}.png (${totalWidth}x${totalHeight}, ${rows} directions × ${cols} frames)`);
 
@@ -174,7 +186,7 @@ async function main() {
 
   const projectRoot = path.join(__dirname, '..');
   const definitionsDir = path.join(projectRoot, 'src', 'sprites', 'definitions');
-  const outputDir = path.join(projectRoot, 'src', 'assets', 'sprites');
+  const outputDir = path.join(projectRoot, 'public', 'sprites');
 
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });

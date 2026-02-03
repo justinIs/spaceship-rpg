@@ -57,5 +57,5 @@ See `docs/GAME_DESIGN.md` for full details. Key concepts:
 - Sprite definitions live in `src/sprites/definitions/` as TypeScript files
 - Each sprite has a palette (color index -> hex) and pixel map (2D array)
 - Generate PNGs: `npx tsx scripts/generate-sprite-pngs.ts`
-- Output: `src/assets/sprites/[name].png`
+- Output: `public/sprites/[name].png`
 - User describes sprite → Claude generates palette/pixels → script creates PNG → optional Piskel touchups

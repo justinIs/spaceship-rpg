@@ -47,10 +47,6 @@ export class OverworldScene extends Phaser.Scene {
     private hintText!: Phaser.GameObjects.Text;
     private currentDirection = 0; // Track last facing direction (0-7)
 
-    // UI components
-    private objectiveTracker!: ObjectiveTracker;
-    private dialogueBox!: DialogueBox;
-
     // Mobile touch state
     private touchStartX = 0;
     private touchStartY = 0;
@@ -64,11 +60,12 @@ export class OverworldScene extends Phaser.Scene {
 
 
     preload() {
-        this.load.spritesheet(SPRITE_KEYS.PLAYER, 'src/assets/sprites/player.png', {
+        const baseUrl = import.meta.env.BASE_URL;
+        this.load.spritesheet(SPRITE_KEYS.PLAYER, `${baseUrl}sprites/player.png`, {
             frameWidth: SPRITE_CONFIG.PLAYER.frameWidth,
             frameHeight: SPRITE_CONFIG.PLAYER.frameHeight
         });
-        this.load.spritesheet(SPRITE_KEYS.ROBOT, 'src/assets/sprites/robot.png', {
+        this.load.spritesheet(SPRITE_KEYS.ROBOT, `${baseUrl}sprites/robot.png`, {
             frameWidth: SPRITE_CONFIG.ROBOT.frameWidth,
             frameHeight: SPRITE_CONFIG.ROBOT.frameHeight
         });
@@ -137,12 +134,12 @@ export class OverworldScene extends Phaser.Scene {
         });
 
         // Simple label
-        const label = this.add.text(homeX, homeY - TILE_SIZE * 6, 'Your Homestead', {
+        this.add.text(homeX, homeY - TILE_SIZE * 6, 'Your Homestead', {
             fontSize: '14px',
             color: '#333333',
             fontFamily: 'monospace',
-        }).setOrigin(0.5);
-        label.setDepth(5);
+        }).setOrigin(0.5)
+            .setDepth(5);
 
         // Interaction prompt text (follows camera, shown when near interactable)
         this.promptText = this.add.text(0, 0, '', {
@@ -163,8 +160,8 @@ export class OverworldScene extends Phaser.Scene {
         }).setOrigin(0.5, 1).setDepth(20).setScrollFactor(0).setVisible(false);
 
         // Initialize UI components
-        this.objectiveTracker = new ObjectiveTracker(this);
-        this.dialogueBox = new DialogueBox(this);
+        new ObjectiveTracker(this);
+        new DialogueBox(this);
 
         // Initialize game state and start intro
         this.initializeGameState();
